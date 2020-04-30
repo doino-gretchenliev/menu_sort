@@ -25,21 +25,22 @@
 #define __ACT_FUNCTIONS_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <gctypes.h>
 
-void InitACTFunctionPointers(void);
+    void InitACTFunctionPointers(void);
 
-extern void(*nn_act_initialize)(void);
-extern unsigned long(*nn_act_GetPersistentIdEx)(unsigned char);
-extern unsigned char(*nn_act_getslotno)(void);
-extern unsigned char(*nn_act_getdefaultaccount)(void);
-extern void(*nn_act_finalize)(void);
+    extern void (*nn_act_initialize)(void);
+    extern unsigned long (*nn_act_GetPersistentIdEx)(unsigned char);
+    extern unsigned char (*nn_act_getslotno)(void);
+    extern unsigned char (*nn_act_getdefaultaccount)(void);
+    extern void (*nn_act_finalize)(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif 
+#endif

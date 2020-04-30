@@ -26,17 +26,15 @@
 
 unsigned int acp_handle __attribute__((section(".data"))) = 0;
 
-EXPORT_DECL(void, GetMetaXml, void * _ACPMetaXml);
+EXPORT_DECL(void, GetMetaXml, void *_ACPMetaXml);
 
 void InitAcquireACP(void)
 {
     OSDynLoad_Acquire("nn_acp.rpl", &acp_handle);
 }
 
-
 void InitACPFunctionPointers(void)
 {
     InitAcquireACP();
-    OSDynLoad_FindExport(acp_handle,0,"GetMetaXml__Q2_2nn3acpFP11_ACPMetaXml",&GetMetaXml);
+    OSDynLoad_FindExport(acp_handle, 0, "GetMetaXml__Q2_2nn3acpFP11_ACPMetaXml", &GetMetaXml);
 }
-

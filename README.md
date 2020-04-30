@@ -1,5 +1,5 @@
 Wii U Menu Sort
-ver 0.1.0
+ver 0.2.0
 
 WARNING:  TRY ON REDNAND FIRST.
 I am not responsible for bricked consoles.

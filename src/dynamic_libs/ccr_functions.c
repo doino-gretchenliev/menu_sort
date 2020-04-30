@@ -30,6 +30,5 @@ void InitCCRFunctionPointers(void)
     unsigned int ccr_handle;
     OSDynLoad_Acquire("nn_ccr.rpl", &ccr_handle);
 
-	OSDynLoad_FindExport(ccr_handle, 0, "CCRSysGetLanguage", &CCRSysGetLanguage);
+    OSDynLoad_FindExport(ccr_handle, 0, "CCRSysGetLanguage", &CCRSysGetLanguage);
 }
-

@@ -29,9 +29,8 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 
-
-#define TITLE_TEXT			"Sort Wii U Menu v0.1 - Yardape8000"
-#define HBL_TITLE_ID		0x13374842
+#define TITLE_TEXT "Sort Wii U Menu v0.2.0 - Yardape8000 & doino-gretchenliev"
+#define HBL_TITLE_ID 0x13374842
 
 static const char *systemXmlPath = "storage_slc:/config/system.xml";
 static const char *syshaxXmlPath = "storage_slc:/config/syshax.xml";
@@ -44,13 +43,14 @@ struct MenuItemStruct
 {
 	u32 ID;
 	u32 type;
+	u32 titleIDPrefix;
 	char name[65];
 };
 
 enum itemTypes
 {
 	MENU_ITEM_NAND = 0x01,
-	MENU_ITEM_USB  = 0x02,
+	MENU_ITEM_USB = 0x02,
 	MENU_ITEM_DISC = 0x05,
 	MENU_ITEM_VWII = 0x09,
 	MENU_ITEM_FLDR = 0x10
@@ -67,12 +67,12 @@ int MCPHookOpen()
 {
 	//take over mcp thread
 	mcp_hook_fd = MCP_Open();
-	if(mcp_hook_fd < 0)
+	if (mcp_hook_fd < 0)
 		return -1;
-	IOS_IoctlAsync(mcp_hook_fd, 0x62, (void*)0, 0, (void*)0, 0, someFunc, (void*)0);
+	IOS_IoctlAsync(mcp_hook_fd, 0x62, (void *)0, 0, (void *)0, 0, someFunc, (void *)0);
 	//let wupserver start up
 	sleep(1);
-	if(IOSUHAX_Open("/dev/mcp") < 0)
+	if (IOSUHAX_Open("/dev/mcp") < 0)
 	{
 		MCP_Close(mcp_hook_fd);
 		mcp_hook_fd = -1;
@@ -83,7 +83,7 @@ int MCPHookOpen()
 
 void MCPHookClose()
 {
-	if(mcp_hook_fd < 0)
+	if (mcp_hook_fd < 0)
 		return;
 	//close down wupserver, return control to mcp
 	IOSUHAX_Close();
@@ -96,12 +96,12 @@ void MCPHookClose()
 int fsa_read(int fsa_fd, int fd, void *buf, int len)
 {
 	int done = 0;
-	uint8_t *buf_u8 = (uint8_t*)buf;
-	while(done < len)
+	uint8_t *buf_u8 = (uint8_t *)buf;
+	while (done < len)
 	{
 		size_t read_size = len - done;
 		int result = IOSUHAX_FSA_ReadFile(fsa_fd, buf_u8 + done, 0x01, read_size, fd, 0);
-		if(result < 0)
+		if (result < 0)
 			return result;
 		else
 			done += result;
@@ -109,9 +109,39 @@ int fsa_read(int fsa_fd, int fd, void *buf, int len)
 	return done;
 }
 
+int startsWith(const char *a, const char *b)
+{
+	return strncasecmp(b, a, strlen(b)) == 0;
+}
+
+int smartStrcmp(const char *a, const char *b)
+{
+	char *ac = malloc(strlen(a) + 1);
+	char *bc = malloc(strlen(b) + 1);
+
+	strcpy(ac, a);
+	strcpy(bc, b);
+
+	if (startsWith(ac, "the "))
+	{
+		memmove(ac, ac + 4, strlen(ac));
+	}
+
+	if (startsWith(bc, "the "))
+	{
+		memmove(bc, bc + 4, strlen(bc));
+	}
+
+	int result = strcasecmp(ac, bc);
+	free(ac);
+	free(bc);
+
+	return result;
+}
+
 int fSortCond(const void *c1, const void *c2)
 {
-	return stricmp(((struct MenuItemStruct*)c1)->name,((struct MenuItemStruct*)c2)->name);
+	return smartStrcmp(((struct MenuItemStruct *)c1)->name, ((struct MenuItemStruct *)c2)->name);
 }
 
 void getXMLelement(const char *buff, size_t buffSize, const char *url, const char *elementName, char *text, size_t textSize)
@@ -121,15 +151,21 @@ void getXMLelement(const char *buff, size_t buffSize, const char *url, const cha
 	xmlNode *root_element = xmlDocGetRootElement(doc);
 	xmlNode *cur_node = NULL;
 	xmlChar *nodeText = NULL;
-	for (cur_node = root_element->children; cur_node; cur_node = cur_node->next) {
-		if (cur_node->type == XML_ELEMENT_NODE) {
-			if(strcmpi((const char *)cur_node->name, elementName) == 0)
+
+	if (root_element != NULL && root_element->children != NULL)
+	{
+		for (cur_node = root_element->children; cur_node; cur_node = cur_node->next)
+		{
+			if (cur_node->type == XML_ELEMENT_NODE)
 			{
-				nodeText = xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
-				if((nodeText != NULL) && (textSize > 1))
-					strncpy(text, (const char *)nodeText, textSize - 1);
-				xmlFree(nodeText);
-				break;
+				if (strcasecmp((const char *)cur_node->name, elementName) == 0)
+				{
+					nodeText = xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
+					if ((nodeText != NULL) && (textSize > 1))
+						strncpy(text, (const char *)nodeText, textSize - 1);
+					xmlFree(nodeText);
+					break;
+				}
 			}
 		}
 	}
@@ -141,35 +177,36 @@ int getXMLelementInt(const char *buff, size_t buffSize, const char *url, const c
 	int ret;
 	char text[40] = "";
 	getXMLelement(buff, buffSize, url, elementName, text, 40);
-	ret = (int)strtol((char*)text, NULL, base);
+	ret = (int)strtol((char *)text, NULL, base);
 	return ret;
 }
 
 int readToBuffer(char **ptr, size_t *bufferSize, const char *path)
 {
-		FILE *fp;
-		size_t size;
-		fp = fopen(path, "rb");
-		if (!fp)
-			return -1;
-		fseek(fp, 0L, SEEK_END);	// fstat.st_size returns 0, so we use this instead
-		size = ftell(fp);
-		rewind(fp);
-		*ptr = malloc(size);
-		memset(*ptr, 0, size);
-		fread(*ptr, 1, size, fp);
-		fclose(fp);
-		*bufferSize = size;
-		return 0;
+	FILE *fp;
+	size_t size;
+	fp = fopen(path, "rb");
+	if (!fp)
+		return -1;
+	fseek(fp, 0L, SEEK_END); // fstat.st_size returns 0, so we use this instead
+	size = ftell(fp);
+	rewind(fp);
+	*ptr = malloc(size);
+	memset(*ptr, 0, size);
+	fread(*ptr, 1, size, fp);
+	fclose(fp);
+	*bufferSize = size;
+	return 0;
 }
 
-void getIDname(u32 id, char *name, size_t nameSize, u32 type)
+void getIDname(u32 id, u32 titleIDPrefix, char *name, size_t nameSize, u32 type)
 {
 	char *xBuffer = NULL;
 	u32 xSize = 0;
 	char path[255] = "";
 	name[0] = 0;
-	sprintf(path, "storage_%s:/usr/title/00050000/%08x/meta/meta.xml", (type == MENU_ITEM_USB) ? "usb": "mlc", id);
+	sprintf(path, "storage_%s:/usr/title/%08x/%08x/meta/meta.xml", (type == MENU_ITEM_USB) ? "usb" : "mlc", titleIDPrefix, id);
+	log_printf("%s\n", path);
 	if (readToBuffer(&xBuffer, &xSize, path) < 0)
 		log_printf("Could not open %08x meta.xml\n", id);
 	else
@@ -198,10 +235,10 @@ int Menu_Main(void)
 	InitOSFunctionPointers();
 	InitSysFunctionPointers();
 	InitACTFunctionPointers();
-//	InitCCRFunctionPointers();
+	//	InitCCRFunctionPointers();
 	InitSocketFunctionPointers();
 
-	log_init("192.168.0.100");
+	log_init("192.168.40.2");
 	log_print("\n\nStarting Main\n");
 
 	InitFSFunctionPointers();
@@ -244,7 +281,7 @@ int Menu_Main(void)
 	OSScreenClearBufferEx(0, 0);
 	OSScreenClearBufferEx(1, 0);
 
-	for(int i = 0; i < 2; i++)
+	for (int i = 0; i < 2; i++)
 	{
 		OSScreenPutFontEx(i, 0, 0, TITLE_TEXT);
 		//OSScreenPutFontEx(i, 0, 1, TITLE_TEXT2);
@@ -280,9 +317,9 @@ int Menu_Main(void)
 	log_printf("Mount partitions\n");
 
 	int res = IOSUHAX_Open(NULL);
-	if(res < 0)
+	if (res < 0)
 		res = MCPHookOpen();
-	if(res < 0)
+	if (res < 0)
 	{
 		strcpy(failError, "IOSUHAX_open failed\n");
 		goto prgEnd;
@@ -385,7 +422,7 @@ int Menu_Main(void)
 	if (fp)
 	{
 		log_printf("Loading %s\n", dmPath);
-		fseek(fp, 0L, SEEK_END);	// fstat.st_size returns 0, so we use this instead
+		fseek(fp, 0L, SEEK_END); // fstat.st_size returns 0, so we use this instead
 		int dmSize = ftell(fp);
 		rewind(fp);
 		if (dmSize % 4 != 0)
@@ -448,7 +485,6 @@ int Menu_Main(void)
 			// sort sub folder
 			itemSpaces = 60;
 			folderOffset = 0x002D24 + ((fNum - 1) * (60 * 16 * 2 + 56));
-
 		}
 		int usbOffset = itemSpaces * 16;
 		for (int i = 0; i < itemSpaces; i++)
@@ -460,10 +496,10 @@ int Menu_Main(void)
 			memcpy(&id, fBuffer + itemOffset + 4, sizeof(u32));
 			memcpy(&type, fBuffer + itemOffset + 8, sizeof(u32));
 
-			if ((id == HBL_TITLE_ID) 			// HBL
-				|| (cbhcID &&(id == cbhcID))	// CBHC
-				|| (type == MENU_ITEM_DISC)		// Disc
-				|| (type == MENU_ITEM_VWII))	// vWii
+			if ((id == HBL_TITLE_ID)		  // HBL
+				|| (cbhcID && (id == cbhcID)) // CBHC
+				|| (type == MENU_ITEM_DISC)	  // Disc
+				|| (type == MENU_ITEM_VWII))  // vWii
 			{
 				moveableItem[i] = false;
 				continue;
@@ -482,7 +518,7 @@ int Menu_Main(void)
 				// Settings, MiiMaker, etc?
 				u32 idH = 0;
 				memcpy(&idH, fBuffer + itemOffset, sizeof(u32));
-				if ((idH != 0x00050000) && (idH != 0))
+				if ((idH != 0x00050000) && (idH != 0x00050002) && (idH != 0))
 				{
 					moveableItem[i] = false;
 					continue;
@@ -510,14 +546,18 @@ int Menu_Main(void)
 				}
 				if (!moveableItem[i])
 					continue;
+
 				// found sortable item
-				getIDname(id, menuItem[itemNum].name, 65, type);
+				memcpy(&menuItem[itemNum].titleIDPrefix, fBuffer + itemOffset, sizeof(u32));
+				getIDname(id, menuItem[itemNum].titleIDPrefix, menuItem[itemNum].name, 65, type);
 				menuItem[itemNum].ID = id;
 				menuItem[itemNum].type = type;
 				itemNum++;
 			}
 		}
 		itemTotal = itemNum;
+		log_printf("\nDone reading folders \n");
+
 		// Sort Folder
 		qsort(menuItem, itemTotal, sizeof(struct MenuItemStruct), fSortCond);
 
@@ -538,21 +578,24 @@ int Menu_Main(void)
 				if (menuItem[itemNum].type == MENU_ITEM_NAND)
 				{
 					idNAND = menuItem[itemNum].ID;
-					idNANDh = 0x00050000;
+					idNANDh = menuItem[itemNum].titleIDPrefix;
 				}
 				else
 				{
 					idUSB = menuItem[itemNum].ID;
-					idUSBh = 0x00050000;
+					idUSBh = menuItem[itemNum].titleIDPrefix;
 				}
 				log_printf("%d %s\n", i, menuItem[itemNum].name);
 				itemNum++;
 			}
+
 			memcpy(fBuffer + itemOffset, &idNANDh, sizeof(u32));
 			memcpy(fBuffer + itemOffset + 4, &idNAND, sizeof(u32));
 			memset(fBuffer + itemOffset + 8, 0, 8);
 			fBuffer[itemOffset + 0x0b] = 1;
+
 			itemOffset += usbOffset;
+
 			memcpy(fBuffer + itemOffset, &idUSBh, sizeof(u32));
 			memcpy(fBuffer + itemOffset + 4, &idUSB, sizeof(u32));
 			memset(fBuffer + itemOffset + 8, 0, 8);
@@ -571,7 +614,7 @@ int Menu_Main(void)
 		strcpy(failError, "Could not write to BaristaAccountSaveFile.dat\n");
 		goto prgEnd;
 	}
-		
+
 	free(fBuffer);
 	free(dmItem);
 
@@ -580,17 +623,17 @@ int Menu_Main(void)
 	int vpadReadCounter = 0;
 	int update_screen = 1;
 
-	while(1)
+	while (1)
 	{
-		if(update_screen)
+		if (update_screen)
 		{
 			OSScreenClearBufferEx(0, 0);
 			OSScreenClearBufferEx(1, 0);
-			for(int i = 0; i < 2; i++)
+			for (int i = 0; i < 2; i++)
 			{
 				OSScreenPutFontEx(i, 0, 0, TITLE_TEXT);
 				char text[20] = "";
-				sprintf(text, "User ID: %1x", userPersistentId &0x0000000f);
+				sprintf(text, "User ID: %1x", userPersistentId & 0x0000000f);
 				OSScreenPutFontEx(i, 0, 2, text);
 				OSScreenPutFontEx(i, 0, 4, "DONE - Press Home to exit");
 			}
@@ -600,7 +643,7 @@ int Menu_Main(void)
 			update_screen = 0;
 		}
 		//! update only at 50 Hz, thats more than enough
-		if(++vpadReadCounter >= 20)
+		if (++vpadReadCounter >= 20)
 		{
 			vpadReadCounter = 0;
 
@@ -610,7 +653,7 @@ int Menu_Main(void)
 			if (!vpadError)
 				pressedBtns = vpad.btns_d | vpad.btns_h;
 
-			if(pressedBtns & VPAD_BUTTON_HOME)
+			if (pressedBtns & VPAD_BUTTON_HOME)
 				break;
 		}
 
@@ -623,7 +666,7 @@ prgEnd:
 	{
 		OSScreenClearBufferEx(0, 0);
 		OSScreenClearBufferEx(1, 0);
-		for(int i = 0; i < 2; i++)
+		for (int i = 0; i < 2; i++)
 		{
 			OSScreenPutFontEx(i, 0, 0, TITLE_TEXT);
 			OSScreenPutFontEx(i, 0, 2, failError);
@@ -643,7 +686,7 @@ prgEnd:
 	unmount_fs("storage_mlc");
 	unmount_fs("storage_usb");
 	IOSUHAX_FSA_Close(fsaFd);
-	if(mcp_hook_fd >= 0)
+	if (mcp_hook_fd >= 0)
 		MCPHookClose();
 	else
 		IOSUHAX_Close();

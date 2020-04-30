@@ -23,7 +23,7 @@
  ***************************************************************************/
 #include "os_functions.h"
 
-EXPORT_DECL(void, nn_act_initialize, void );
+EXPORT_DECL(void, nn_act_initialize, void);
 EXPORT_DECL(unsigned long, nn_act_GetPersistentIdEx, unsigned char);
 EXPORT_DECL(unsigned char, nn_act_getslotno, void);
 EXPORT_DECL(unsigned char, nn_act_getdefaultaccount, void);
@@ -31,8 +31,8 @@ EXPORT_DECL(void, nn_act_finalize, void);
 
 void InitACTFunctionPointers(void)
 {
-    unsigned int act_handle;
-    OSDynLoad_Acquire("nn_act.rpl", &act_handle);
+	unsigned int act_handle;
+	OSDynLoad_Acquire("nn_act.rpl", &act_handle);
 
 	OSDynLoad_FindExport(act_handle, 0, "Initialize__Q2_2nn3actFv", &nn_act_initialize);
 	OSDynLoad_FindExport(act_handle, 0, "GetPersistentIdEx__Q2_2nn3actFUc", &nn_act_GetPersistentIdEx);
@@ -40,4 +40,3 @@ void InitACTFunctionPointers(void)
 	OSDynLoad_FindExport(act_handle, 0, "GetDefaultAccount__Q2_2nn3actFv", &nn_act_getdefaultaccount);
 	OSDynLoad_FindExport(act_handle, 0, "Finalize__Q2_2nn3actFv", &nn_act_finalize);
 }
-

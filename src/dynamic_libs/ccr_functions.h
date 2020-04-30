@@ -25,17 +25,18 @@
 #define __CCR_FUNCTIONS_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <gctypes.h>
 
-void InitCCRFunctionPointers(void);
+    void InitCCRFunctionPointers(void);
 
-extern void(*CCRSysGetLanguage)(u32 *language);
+    extern void (*CCRSysGetLanguage)(u32 *language);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif 
+#endif

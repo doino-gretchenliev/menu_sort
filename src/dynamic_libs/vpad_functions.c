@@ -36,4 +36,3 @@ void InitVPadFunctionPointers(void)
     OS_FIND_EXPORT(vpad_handle, VPADInit);
     OS_FIND_EXPORT(vpad_handle, VPADRead);
 }
-

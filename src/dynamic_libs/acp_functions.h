@@ -25,15 +25,16 @@
 #define __ACP_FUNCTIONS_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <gctypes.h>
 
-extern unsigned int acp_handle;
+    extern unsigned int acp_handle;
 
-void InitACPFunctionPointers(void);
-void InitAcquireACP(void);
+    void InitACPFunctionPointers(void);
+    void InitAcquireACP(void);
 
 #ifdef __cplusplus
 }

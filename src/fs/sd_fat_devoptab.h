@@ -25,11 +25,12 @@
 #define __SD_FAT_DEVOPTAB_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-int mount_sd_fat(const char *path);
-int unmount_sd_fat(const char *path);
+    int mount_sd_fat(const char *path);
+    int unmount_sd_fat(const char *path);
 
 #ifdef __cplusplus
 }

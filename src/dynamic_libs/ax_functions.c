@@ -24,7 +24,7 @@
 #include "os_functions.h"
 #include "ax_functions.h"
 
-EXPORT_DECL(void, AXInitWithParams, u32 * params);
+EXPORT_DECL(void, AXInitWithParams, u32 *params);
 EXPORT_DECL(void, AXQuit, void);
 EXPORT_DECL(u32, AXGetInputSamplesPerSec, void);
 EXPORT_DECL(u32, AXGetInputSamplesPerFrame, void);
@@ -37,10 +37,10 @@ EXPORT_DECL(void, AXSetVoiceVe, void *v, const void *vol);
 EXPORT_DECL(s32, AXSetVoiceDeviceMix, void *v, s32 device, u32 id, void *mix);
 EXPORT_DECL(void, AXSetVoiceState, void *v, u16 state);
 EXPORT_DECL(void, AXSetVoiceSrc, void *v, const void *src);
-EXPORT_DECL(s32, AXSetVoiceSrcRatio, void *v,f32 ratio)
-EXPORT_DECL(void *, AXAcquireVoice, u32 prio, void * callback, u32 arg);
+EXPORT_DECL(s32, AXSetVoiceSrcRatio, void *v, f32 ratio)
+EXPORT_DECL(void *, AXAcquireVoice, u32 prio, void *callback, u32 arg);
 EXPORT_DECL(void, AXFreeVoice, void *v);
-EXPORT_DECL(void, AXRegisterFrameCallback, void * callback);
+EXPORT_DECL(void, AXRegisterFrameCallback, void *callback);
 EXPORT_DECL(u32, AXGetVoiceLoopCount, void *v);
 EXPORT_DECL(void, AXSetVoiceEndOffset, void *v, u32 offset);
 EXPORT_DECL(void, AXSetVoiceLoopOffset, void *v, u32 offset);
@@ -71,4 +71,3 @@ void InitAXFunctionPointers(void)
     OS_FIND_EXPORT(sound_handle, AXSetVoiceEndOffset);
     OS_FIND_EXPORT(sound_handle, AXSetVoiceLoopOffset);
 }
-

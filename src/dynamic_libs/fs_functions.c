@@ -41,7 +41,7 @@ EXPORT_DECL(int, FSRename, void *pClient, void *pCmd, const char *oldPath, const
 EXPORT_DECL(int, FSRenameAsync, void *pClient, void *pCmd, const char *oldPath, const char *newPath, int error, void *asyncParams);
 EXPORT_DECL(int, FSRemove, void *pClient, void *pCmd, const char *path, int error);
 EXPORT_DECL(int, FSRemoveAsync, void *pClient, void *pCmd, const char *path, int error, void *asyncParams);
-EXPORT_DECL(int, FSFlushQuota, void *pClient, void *pCmd, const char* path, int error);
+EXPORT_DECL(int, FSFlushQuota, void *pClient, void *pCmd, const char *path, int error);
 EXPORT_DECL(int, FSFlushQuotaAsync, void *pClient, void *pCmd, const char *path, int error, void *asyncParams);
 EXPORT_DECL(int, FSGetFreeSpaceSize, void *pClient, void *pCmd, const char *path, uint64_t *returnedFreeSize, int error);
 EXPORT_DECL(int, FSGetFreeSpaceSizeAsync, void *pClient, void *pCmd, const char *path, uint64_t *returnedFreeSize, int error, void *asyncParams);
@@ -49,7 +49,7 @@ EXPORT_DECL(int, FSRollbackQuota, void *pClient, void *pCmd, const char *path, i
 EXPORT_DECL(int, FSRollbackQuotaAsync, void *pClient, void *pCmd, const char *path, int error, void *asyncParams);
 
 EXPORT_DECL(int, FSOpenDir, void *pClient, void *pCmd, const char *path, int *dh, int errHandling);
-EXPORT_DECL(int, FSOpenDirAsync, void *pClient, void* pCmd, const char *path, int *handle, int error, void *asyncParams);
+EXPORT_DECL(int, FSOpenDirAsync, void *pClient, void *pCmd, const char *path, int *handle, int error, void *asyncParams);
 EXPORT_DECL(int, FSReadDir, void *pClient, void *pCmd, int dh, FSDirEntry *dir_entry, int errHandling);
 EXPORT_DECL(int, FSRewindDir, void *pClient, void *pCmd, int dh, int errHandling);
 EXPORT_DECL(int, FSCloseDir, void *pClient, void *pCmd, int dh, int errHandling);
@@ -105,7 +105,6 @@ void InitFSFunctionPointers(void)
     OS_FIND_EXPORT(coreinit_handle, FSChangeDirAsync);
     OS_FIND_EXPORT(coreinit_handle, FSMakeDir);
     OS_FIND_EXPORT(coreinit_handle, FSMakeDirAsync);
-
 
     OS_FIND_EXPORT(coreinit_handle, FSOpenFile);
     OS_FIND_EXPORT(coreinit_handle, FSOpenFileAsync);

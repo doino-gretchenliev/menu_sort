@@ -25,16 +25,16 @@
 #define __SYS_FUNCTIONS_H_
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-void InitSysFunctionPointers(void);
+    void InitSysFunctionPointers(void);
 
-extern void(*_SYSLaunchTitleByPathFromLauncher)(const char* path, int len, int zero);
-extern uint64_t(*_SYSGetSystemApplicationTitleId)(int sysApp);
-extern int (* SYSRelaunchTitle)(int argc, char* argv);
-extern int (* SYSLaunchMenu)(void);
-
+    extern void (*_SYSLaunchTitleByPathFromLauncher)(const char *path, int len, int zero);
+    extern uint64_t (*_SYSGetSystemApplicationTitleId)(int sysApp);
+    extern int (*SYSRelaunchTitle)(int argc, char *argv);
+    extern int (*SYSLaunchMenu)(void);
 
 #ifdef __cplusplus
 }

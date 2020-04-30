@@ -33,30 +33,33 @@
 #include "dynamic_libs/os_functions.h"
 #include "fs_utils.h"
 
-#define FS_ALIGNMENT            0x40
-#define FS_ALIGN(x)             (((x) + FS_ALIGNMENT - 1) & ~(FS_ALIGNMENT - 1))
+#define FS_ALIGNMENT 0x40
+#define FS_ALIGN(x) (((x) + FS_ALIGNMENT - 1) & ~(FS_ALIGNMENT - 1))
 
-typedef struct _sd_fat_private_t {
+typedef struct _sd_fat_private_t
+{
     char *mount_path;
     void *pClient;
     void *pCmd;
     void *pMutex;
 } sd_fat_private_t;
 
-typedef struct _sd_fat_file_state_t {
+typedef struct _sd_fat_file_state_t
+{
     sd_fat_private_t *dev;
-    int fd;                                     /* File descriptor */
-    int flags;                                  /* Opening flags */
-    bool read;                                  /* True if allowed to read from file */
-    bool write;                                 /* True if allowed to write to file */
-    bool append;                                /* True if allowed to append to file */
-    u64 pos;                                    /* Current position within the file (in bytes) */
-    u64 len;                                    /* Total length of the file (in bytes) */
-    struct _sd_fat_file_state_t *prevOpenFile;  /* The previous entry in a double-linked FILO list of open files */
-    struct _sd_fat_file_state_t *nextOpenFile;  /* The next entry in a double-linked FILO list of open files */
+    int fd;                                    /* File descriptor */
+    int flags;                                 /* Opening flags */
+    bool read;                                 /* True if allowed to read from file */
+    bool write;                                /* True if allowed to write to file */
+    bool append;                               /* True if allowed to append to file */
+    u64 pos;                                   /* Current position within the file (in bytes) */
+    u64 len;                                   /* Total length of the file (in bytes) */
+    struct _sd_fat_file_state_t *prevOpenFile; /* The previous entry in a double-linked FILO list of open files */
+    struct _sd_fat_file_state_t *nextOpenFile; /* The next entry in a double-linked FILO list of open files */
 } sd_fat_file_state_t;
 
-typedef struct _sd_fat_dir_entry_t {
+typedef struct _sd_fat_dir_entry_t
+{
     sd_fat_private_t *dev;
     int dirHandle;
 } sd_fat_dir_entry_t;
@@ -75,10 +78,13 @@ static sd_fat_private_t *sd_fat_get_device_data(const char *path)
     // NOTE: We do this manually due to a 'bug' in GetDeviceOpTab
     //       which ignores names with suffixes and causes names
     //       like "ntfs" and "ntfs1" to be seen as equals
-    for (i = 3; i < STD_MAX; i++) {
+    for (i = 3; i < STD_MAX; i++)
+    {
         devoptab = devoptab_list[i];
-        if (devoptab && devoptab->name) {
-            if (strcmp(name, devoptab->name) == 0) {
+        if (devoptab && devoptab->name)
+        {
+            if (strcasecmp(name, devoptab->name) == 0)
+            {
                 return (sd_fat_private_t *)devoptab->deviceData;
             }
         }
@@ -87,21 +93,23 @@ static sd_fat_private_t *sd_fat_get_device_data(const char *path)
     return NULL;
 }
 
-static char *sd_fat_real_path (const char *path, sd_fat_private_t *dev)
+static char *sd_fat_real_path(const char *path, sd_fat_private_t *dev)
 {
     // Sanity check
     if (!path)
         return NULL;
 
     // Move the path pointer to the start of the actual path
-    if (strchr(path, ':') != NULL) {
+    if (strchr(path, ':') != NULL)
+    {
         path = strchr(path, ':') + 1;
     }
 
     int mount_len = strlen(dev->mount_path);
 
-    char *new_name = (char*)malloc(mount_len + strlen(path) + 1);
-    if(new_name) {
+    char *new_name = (char *)malloc(mount_len + strlen(path) + 1);
+    if (new_name)
+    {
         strcpy(new_name, dev->mount_path);
         strcpy(new_name + mount_len, path);
         return new_name;
@@ -109,10 +117,11 @@ static char *sd_fat_real_path (const char *path, sd_fat_private_t *dev)
     return new_name;
 }
 
-static int sd_fat_open_r (struct _reent *r, void *fileStruct, const char *path, int flags, int mode)
+static int sd_fat_open_r(struct _reent *r, void *fileStruct, const char *path, int flags, int mode)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(path);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -125,22 +134,29 @@ static int sd_fat_open_r (struct _reent *r, void *fileStruct, const char *path, 
 
     const char *mode_str;
 
-    if ((flags & 0x03) == O_RDONLY) {
+    if ((flags & 0x03) == O_RDONLY)
+    {
         file->read = true;
         file->write = false;
         file->append = false;
         mode_str = "r";
-    } else if ((flags & 0x03) == O_WRONLY) {
+    }
+    else if ((flags & 0x03) == O_WRONLY)
+    {
         file->read = false;
         file->write = true;
         file->append = (flags & O_APPEND);
         mode_str = file->append ? "a" : "w";
-    } else if ((flags & 0x03) == O_RDWR) {
+    }
+    else if ((flags & 0x03) == O_RDWR)
+    {
         file->read = true;
         file->write = true;
         file->append = (flags & O_APPEND);
         mode_str = file->append ? "a+" : "r+";
-    } else {
+    }
+    else
+    {
         r->_errno = EACCES;
         return -1;
     }
@@ -150,7 +166,8 @@ static int sd_fat_open_r (struct _reent *r, void *fileStruct, const char *path, 
     OSLockMutex(dev->pMutex);
 
     char *real_path = sd_fat_real_path(path, dev);
-    if(!path) {
+    if (!path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
@@ -160,11 +177,12 @@ static int sd_fat_open_r (struct _reent *r, void *fileStruct, const char *path, 
 
     free(real_path);
 
-    if(result == 0)
+    if (result == 0)
     {
         FSStat stats;
         result = FSGetStatFile(dev->pClient, dev->pCmd, fd, &stats, -1);
-        if(result != 0) {
+        if (result != 0)
+        {
             FSCloseFile(dev->pClient, dev->pCmd, fd, -1);
             r->_errno = result;
             OSUnlockMutex(dev->pMutex);
@@ -182,11 +200,11 @@ static int sd_fat_open_r (struct _reent *r, void *fileStruct, const char *path, 
     return -1;
 }
 
-
-static int sd_fat_close_r (struct _reent *r, int fd)
+static int sd_fat_close_r(struct _reent *r, int fd)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -197,7 +215,7 @@ static int sd_fat_close_r (struct _reent *r, int fd)
 
     OSUnlockMutex(file->dev->pMutex);
 
-    if(result < 0)
+    if (result < 0)
     {
         r->_errno = result;
         return -1;
@@ -205,17 +223,18 @@ static int sd_fat_close_r (struct _reent *r, int fd)
     return 0;
 }
 
-static off_t sd_fat_seek_r (struct _reent *r, int fd, off_t pos, int dir)
+static off_t sd_fat_seek_r(struct _reent *r, int fd, off_t pos, int dir)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return 0;
     }
 
     OSLockMutex(file->dev->pMutex);
 
-    switch(dir)
+    switch (dir)
     {
     case SEEK_SET:
         file->pos = pos;
@@ -235,7 +254,7 @@ static off_t sd_fat_seek_r (struct _reent *r, int fd, off_t pos, int dir)
 
     OSUnlockMutex(file->dev->pMutex);
 
-    if(result == 0)
+    if (result == 0)
     {
         return file->pos;
     }
@@ -243,15 +262,16 @@ static off_t sd_fat_seek_r (struct _reent *r, int fd, off_t pos, int dir)
     return result;
 }
 
-static ssize_t sd_fat_write_r (struct _reent *r, int fd, const char *ptr, size_t len)
+static ssize_t sd_fat_write_r(struct _reent *r, int fd, const char *ptr, size_t len)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return 0;
     }
 
-    if(!file->write)
+    if (!file->write)
     {
         r->_errno = EACCES;
         return 0;
@@ -260,11 +280,12 @@ static ssize_t sd_fat_write_r (struct _reent *r, int fd, const char *ptr, size_t
     OSLockMutex(file->dev->pMutex);
 
     size_t len_aligned = FS_ALIGN(len);
-    if(len_aligned > 0x4000)
+    if (len_aligned > 0x4000)
         len_aligned = 0x4000;
 
     unsigned char *tmpBuf = (unsigned char *)memalign(FS_ALIGNMENT, len_aligned);
-    if(!tmpBuf) {
+    if (!tmpBuf)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(file->dev->pMutex);
         return 0;
@@ -272,20 +293,20 @@ static ssize_t sd_fat_write_r (struct _reent *r, int fd, const char *ptr, size_t
 
     size_t done = 0;
 
-    while(done < len)
+    while (done < len)
     {
         size_t write_size = (len_aligned < (len - done)) ? len_aligned : (len - done);
         memcpy(tmpBuf, ptr + done, write_size);
 
         int result = FSWriteFile(file->dev->pClient, file->dev->pCmd, tmpBuf, 0x01, write_size, file->fd, 0, -1);
-        if(result < 0)
+        if (result < 0)
         {
             r->_errno = result;
             break;
         }
-        else if(result == 0)
+        else if (result == 0)
         {
-            if(write_size > 0)
+            if (write_size > 0)
                 done = 0;
             break;
         }
@@ -301,15 +322,16 @@ static ssize_t sd_fat_write_r (struct _reent *r, int fd, const char *ptr, size_t
     return done;
 }
 
-static ssize_t sd_fat_read_r (struct _reent *r, int fd, char *ptr, size_t len)
+static ssize_t sd_fat_read_r(struct _reent *r, int fd, char *ptr, size_t len)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return 0;
     }
 
-    if(!file->read)
+    if (!file->read)
     {
         r->_errno = EACCES;
         return 0;
@@ -318,11 +340,12 @@ static ssize_t sd_fat_read_r (struct _reent *r, int fd, char *ptr, size_t len)
     OSLockMutex(file->dev->pMutex);
 
     size_t len_aligned = FS_ALIGN(len);
-    if(len_aligned > 0x4000)
+    if (len_aligned > 0x4000)
         len_aligned = 0x4000;
 
     unsigned char *tmpBuf = (unsigned char *)memalign(FS_ALIGNMENT, len_aligned);
-    if(!tmpBuf) {
+    if (!tmpBuf)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(file->dev->pMutex);
         return 0;
@@ -330,18 +353,18 @@ static ssize_t sd_fat_read_r (struct _reent *r, int fd, char *ptr, size_t len)
 
     size_t done = 0;
 
-    while(done < len)
+    while (done < len)
     {
         size_t read_size = (len_aligned < (len - done)) ? len_aligned : (len - done);
 
         int result = FSReadFile(file->dev->pClient, file->dev->pCmd, tmpBuf, 0x01, read_size, file->fd, 0, -1);
-        if(result < 0)
+        if (result < 0)
         {
             r->_errno = result;
             done = 0;
             break;
         }
-        else if(result == 0)
+        else if (result == 0)
         {
             //! TODO: error on read_size > 0
             break;
@@ -359,11 +382,11 @@ static ssize_t sd_fat_read_r (struct _reent *r, int fd, char *ptr, size_t len)
     return done;
 }
 
-
-static int sd_fat_fstat_r (struct _reent *r, int fd, struct stat *st)
+static int sd_fat_fstat_r(struct _reent *r, int fd, struct stat *st)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -375,7 +398,8 @@ static int sd_fat_fstat_r (struct _reent *r, int fd, struct stat *st)
 
     FSStat stats;
     int result = FSGetStatFile(file->dev->pClient, file->dev->pCmd, file->fd, &stats, -1);
-    if(result != 0) {
+    if (result != 0)
+    {
         r->_errno = result;
         OSUnlockMutex(file->dev->pMutex);
         return -1;
@@ -398,10 +422,11 @@ static int sd_fat_fstat_r (struct _reent *r, int fd, struct stat *st)
     return 0;
 }
 
-static int sd_fat_ftruncate_r (struct _reent *r, int fd, off_t len)
+static int sd_fat_ftruncate_r(struct _reent *r, int fd, off_t len)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -412,7 +437,8 @@ static int sd_fat_ftruncate_r (struct _reent *r, int fd, off_t len)
 
     OSUnlockMutex(file->dev->pMutex);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         return -1;
     }
@@ -420,10 +446,11 @@ static int sd_fat_ftruncate_r (struct _reent *r, int fd, off_t len)
     return 0;
 }
 
-static int sd_fat_fsync_r (struct _reent *r, int fd)
+static int sd_fat_fsync_r(struct _reent *r, int fd)
 {
     sd_fat_file_state_t *file = (sd_fat_file_state_t *)fd;
-    if(!file->dev) {
+    if (!file->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -434,7 +461,8 @@ static int sd_fat_fsync_r (struct _reent *r, int fd)
 
     OSUnlockMutex(file->dev->pMutex);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         return -1;
     }
@@ -442,10 +470,11 @@ static int sd_fat_fsync_r (struct _reent *r, int fd)
     return 0;
 }
 
-static int sd_fat_stat_r (struct _reent *r, const char *path, struct stat *st)
+static int sd_fat_stat_r(struct _reent *r, const char *path, struct stat *st)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(path);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -456,7 +485,8 @@ static int sd_fat_stat_r (struct _reent *r, const char *path, struct stat *st)
     memset(st, 0, sizeof(struct stat));
 
     char *real_path = sd_fat_real_path(path, dev);
-    if(!real_path) {
+    if (!real_path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
@@ -468,14 +498,15 @@ static int sd_fat_stat_r (struct _reent *r, const char *path, struct stat *st)
 
     free(real_path);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         OSUnlockMutex(dev->pMutex);
         return -1;
     }
 
     // mark root also as directory
-    st->st_mode = ((stats.flag & 0x80000000) || (strlen(dev->mount_path) + 1 == strlen(real_path)))? S_IFDIR : S_IFREG;
+    st->st_mode = ((stats.flag & 0x80000000) || (strlen(dev->mount_path) + 1 == strlen(real_path))) ? S_IFDIR : S_IFREG;
     st->st_nlink = 1;
     st->st_size = stats.size;
     st->st_blocks = (stats.size + 511) >> 9;
@@ -493,16 +524,17 @@ static int sd_fat_stat_r (struct _reent *r, const char *path, struct stat *st)
     return 0;
 }
 
-static int sd_fat_link_r (struct _reent *r, const char *existing, const char *newLink)
+static int sd_fat_link_r(struct _reent *r, const char *existing, const char *newLink)
 {
     r->_errno = ENOTSUP;
     return -1;
 }
 
-static int sd_fat_unlink_r (struct _reent *r, const char *name)
+static int sd_fat_unlink_r(struct _reent *r, const char *name)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(name);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -510,12 +542,12 @@ static int sd_fat_unlink_r (struct _reent *r, const char *name)
     OSLockMutex(dev->pMutex);
 
     char *real_path = sd_fat_real_path(name, dev);
-    if(!real_path) {
+    if (!real_path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
     }
-
 
     int result = FSRemove(dev->pClient, dev->pCmd, real_path, -1);
 
@@ -523,7 +555,8 @@ static int sd_fat_unlink_r (struct _reent *r, const char *name)
 
     OSUnlockMutex(dev->pMutex);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         return -1;
     }
@@ -531,10 +564,11 @@ static int sd_fat_unlink_r (struct _reent *r, const char *name)
     return 0;
 }
 
-static int sd_fat_chdir_r (struct _reent *r, const char *name)
+static int sd_fat_chdir_r(struct _reent *r, const char *name)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(name);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -542,7 +576,8 @@ static int sd_fat_chdir_r (struct _reent *r, const char *name)
     OSLockMutex(dev->pMutex);
 
     char *real_path = sd_fat_real_path(name, dev);
-    if(!real_path) {
+    if (!real_path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
@@ -554,7 +589,8 @@ static int sd_fat_chdir_r (struct _reent *r, const char *name)
 
     OSUnlockMutex(dev->pMutex);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         return -1;
     }
@@ -562,10 +598,11 @@ static int sd_fat_chdir_r (struct _reent *r, const char *name)
     return 0;
 }
 
-static int sd_fat_rename_r (struct _reent *r, const char *oldName, const char *newName)
+static int sd_fat_rename_r(struct _reent *r, const char *oldName, const char *newName)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(oldName);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -573,13 +610,15 @@ static int sd_fat_rename_r (struct _reent *r, const char *oldName, const char *n
     OSLockMutex(dev->pMutex);
 
     char *real_oldpath = sd_fat_real_path(oldName, dev);
-    if(!real_oldpath) {
+    if (!real_oldpath)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
     }
     char *real_newpath = sd_fat_real_path(newName, dev);
-    if(!real_newpath) {
+    if (!real_newpath)
+    {
         r->_errno = ENOMEM;
         free(real_oldpath);
         OSUnlockMutex(dev->pMutex);
@@ -593,19 +632,20 @@ static int sd_fat_rename_r (struct _reent *r, const char *oldName, const char *n
 
     OSUnlockMutex(dev->pMutex);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         return -1;
     }
 
     return 0;
-
 }
 
-static int sd_fat_mkdir_r (struct _reent *r, const char *path, int mode)
+static int sd_fat_mkdir_r(struct _reent *r, const char *path, int mode)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(path);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -613,7 +653,8 @@ static int sd_fat_mkdir_r (struct _reent *r, const char *path, int mode)
     OSLockMutex(dev->pMutex);
 
     char *real_path = sd_fat_real_path(path, dev);
-    if(!real_path) {
+    if (!real_path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
@@ -625,7 +666,8 @@ static int sd_fat_mkdir_r (struct _reent *r, const char *path, int mode)
 
     OSUnlockMutex(dev->pMutex);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         return -1;
     }
@@ -633,10 +675,11 @@ static int sd_fat_mkdir_r (struct _reent *r, const char *path, int mode)
     return 0;
 }
 
-static int sd_fat_statvfs_r (struct _reent *r, const char *path, struct statvfs *buf)
+static int sd_fat_statvfs_r(struct _reent *r, const char *path, struct statvfs *buf)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(path);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -647,7 +690,8 @@ static int sd_fat_statvfs_r (struct _reent *r, const char *path, struct statvfs 
     memset(buf, 0, sizeof(struct statvfs));
 
     char *real_path = sd_fat_real_path(path, dev);
-    if(!real_path) {
+    if (!real_path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return -1;
@@ -659,7 +703,8 @@ static int sd_fat_statvfs_r (struct _reent *r, const char *path, struct statvfs 
 
     free(real_path);
 
-    if(result < 0) {
+    if (result < 0)
+    {
         r->_errno = result;
         OSUnlockMutex(dev->pMutex);
         return -1;
@@ -697,10 +742,11 @@ static int sd_fat_statvfs_r (struct _reent *r, const char *path, struct statvfs 
     return 0;
 }
 
-static DIR_ITER *sd_fat_diropen_r (struct _reent *r, DIR_ITER *dirState, const char *path)
+static DIR_ITER *sd_fat_diropen_r(struct _reent *r, DIR_ITER *dirState, const char *path)
 {
     sd_fat_private_t *dev = sd_fat_get_device_data(path);
-    if(!dev) {
+    if (!dev)
+    {
         r->_errno = ENODEV;
         return NULL;
     }
@@ -710,7 +756,8 @@ static DIR_ITER *sd_fat_diropen_r (struct _reent *r, DIR_ITER *dirState, const c
     OSLockMutex(dev->pMutex);
 
     char *real_path = sd_fat_real_path(path, dev);
-    if(!real_path) {
+    if (!real_path)
+    {
         r->_errno = ENOMEM;
         OSUnlockMutex(dev->pMutex);
         return NULL;
@@ -724,7 +771,7 @@ static DIR_ITER *sd_fat_diropen_r (struct _reent *r, DIR_ITER *dirState, const c
 
     OSUnlockMutex(dev->pMutex);
 
-    if(result < 0)
+    if (result < 0)
     {
         r->_errno = result;
         return NULL;
@@ -736,10 +783,11 @@ static DIR_ITER *sd_fat_diropen_r (struct _reent *r, DIR_ITER *dirState, const c
     return dirState;
 }
 
-static int sd_fat_dirclose_r (struct _reent *r, DIR_ITER *dirState)
+static int sd_fat_dirclose_r(struct _reent *r, DIR_ITER *dirState)
 {
     sd_fat_dir_entry_t *dirIter = (sd_fat_dir_entry_t *)dirState->dirStruct;
-    if(!dirIter->dev) {
+    if (!dirIter->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -750,7 +798,7 @@ static int sd_fat_dirclose_r (struct _reent *r, DIR_ITER *dirState)
 
     OSUnlockMutex(dirIter->dev->pMutex);
 
-    if(result < 0)
+    if (result < 0)
     {
         r->_errno = result;
         return -1;
@@ -758,10 +806,11 @@ static int sd_fat_dirclose_r (struct _reent *r, DIR_ITER *dirState)
     return 0;
 }
 
-static int sd_fat_dirreset_r (struct _reent *r, DIR_ITER *dirState)
+static int sd_fat_dirreset_r(struct _reent *r, DIR_ITER *dirState)
 {
     sd_fat_dir_entry_t *dirIter = (sd_fat_dir_entry_t *)dirState->dirStruct;
-    if(!dirIter->dev) {
+    if (!dirIter->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
@@ -772,7 +821,7 @@ static int sd_fat_dirreset_r (struct _reent *r, DIR_ITER *dirState)
 
     OSUnlockMutex(dirIter->dev->pMutex);
 
-    if(result < 0)
+    if (result < 0)
     {
         r->_errno = result;
         return -1;
@@ -780,20 +829,21 @@ static int sd_fat_dirreset_r (struct _reent *r, DIR_ITER *dirState)
     return 0;
 }
 
-static int sd_fat_dirnext_r (struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *st)
+static int sd_fat_dirnext_r(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *st)
 {
     sd_fat_dir_entry_t *dirIter = (sd_fat_dir_entry_t *)dirState->dirStruct;
-    if(!dirIter->dev) {
+    if (!dirIter->dev)
+    {
         r->_errno = ENODEV;
         return -1;
     }
 
     OSLockMutex(dirIter->dev->pMutex);
 
-    FSDirEntry * dir_entry = malloc(sizeof(FSDirEntry));
+    FSDirEntry *dir_entry = malloc(sizeof(FSDirEntry));
 
     int result = FSReadDir(dirIter->dev->pClient, dirIter->dev->pCmd, dirIter->dirHandle, dir_entry, -1);
-    if(result < 0)
+    if (result < 0)
     {
         free(dir_entry);
         r->_errno = result;
@@ -804,7 +854,7 @@ static int sd_fat_dirnext_r (struct _reent *r, DIR_ITER *dirState, char *filenam
     // Fetch the current entry
     strcpy(filename, dir_entry->name);
 
-    if(st)
+    if (st)
     {
         memset(st, 0, sizeof(struct stat));
         st->st_mode = (dir_entry->stat.flag & 0x80000000) ? S_IFDIR : S_IFREG;
@@ -828,7 +878,7 @@ static int sd_fat_dirnext_r (struct _reent *r, DIR_ITER *dirState, char *filenam
 // NTFS device driver devoptab
 static const devoptab_t devops_sd_fat = {
     NULL, /* Device name */
-    sizeof (sd_fat_file_state_t),
+    sizeof(sd_fat_file_state_t),
     sd_fat_open_r,
     sd_fat_close_r,
     sd_fat_write_r,
@@ -841,7 +891,7 @@ static const devoptab_t devops_sd_fat = {
     sd_fat_chdir_r,
     sd_fat_rename_r,
     sd_fat_mkdir_r,
-    sizeof (sd_fat_dir_entry_t),
+    sizeof(sd_fat_dir_entry_t),
     sd_fat_diropen_r,
     sd_fat_dirreset_r,
     sd_fat_dirnext_r,
@@ -854,7 +904,7 @@ static const devoptab_t devops_sd_fat = {
     NULL  /* Device data */
 };
 
-static int sd_fat_add_device (const char *name, const char *mount_path, void *pClient, void *pCmd)
+static int sd_fat_add_device(const char *name, const char *mount_path, void *pClient, void *pCmd)
 {
     devoptab_t *dev = NULL;
     char *devname = NULL;
@@ -862,31 +912,34 @@ static int sd_fat_add_device (const char *name, const char *mount_path, void *pC
     int i;
 
     // Sanity check
-    if (!name) {
+    if (!name)
+    {
         errno = EINVAL;
         return -1;
     }
 
     // Allocate a devoptab for this device
-    dev = (devoptab_t *) malloc(sizeof(devoptab_t) + strlen(name) + 1);
-    if (!dev) {
+    dev = (devoptab_t *)malloc(sizeof(devoptab_t) + strlen(name) + 1);
+    if (!dev)
+    {
         errno = ENOMEM;
         return -1;
     }
 
     // Use the space allocated at the end of the devoptab for storing the device name
-    devname = (char*)(dev + 1);
+    devname = (char *)(dev + 1);
     strcpy(devname, name);
 
     // create private data
     sd_fat_private_t *priv = (sd_fat_private_t *)malloc(sizeof(sd_fat_private_t) + strlen(mount_path) + 1);
-    if(!priv) {
+    if (!priv)
+    {
         free(dev);
         errno = ENOMEM;
         return -1;
     }
 
-    devpath = (char*)(priv+1);
+    devpath = (char *)(priv + 1);
     strcpy(devpath, mount_path);
 
     // setup private data
@@ -895,7 +948,8 @@ static int sd_fat_add_device (const char *name, const char *mount_path, void *pC
     priv->pCmd = pCmd;
     priv->pMutex = malloc(OS_MUTEX_SIZE);
 
-    if(!priv->pMutex) {
+    if (!priv->pMutex)
+    {
         free(dev);
         free(priv);
         errno = ENOMEM;
@@ -910,8 +964,10 @@ static int sd_fat_add_device (const char *name, const char *mount_path, void *pC
     dev->deviceData = priv;
 
     // Add the device to the devoptab table (if there is a free slot)
-    for (i = 3; i < STD_MAX; i++) {
-        if (devoptab_list[i] == devoptab_list[0]) {
+    for (i = 3; i < STD_MAX; i++)
+    {
+        if (devoptab_list[i] == devoptab_list[0])
+        {
             devoptab_list[i] = dev;
             return 0;
         }
@@ -926,7 +982,7 @@ static int sd_fat_add_device (const char *name, const char *mount_path, void *pC
     return -1;
 }
 
-static int sd_fat_remove_device (const char *path, void **pClient, void **pCmd, char **mountPath)
+static int sd_fat_remove_device(const char *path, void **pClient, void **pCmd, char **mountPath)
 {
     const devoptab_t *devoptab = NULL;
     char name[128] = {0};
@@ -940,26 +996,29 @@ static int sd_fat_remove_device (const char *path, void **pClient, void **pCmd, 
     // NOTE: We do this manually due to a 'bug' in RemoveDevice
     //       which ignores names with suffixes and causes names
     //       like "ntfs" and "ntfs1" to be seen as equals
-    for (i = 3; i < STD_MAX; i++) {
+    for (i = 3; i < STD_MAX; i++)
+    {
         devoptab = devoptab_list[i];
-        if (devoptab && devoptab->name) {
-            if (strcmp(name, devoptab->name) == 0) {
+        if (devoptab && devoptab->name)
+        {
+            if (strcasecmp(name, devoptab->name) == 0)
+            {
                 devoptab_list[i] = devoptab_list[0];
 
-                if(devoptab->deviceData)
+                if (devoptab->deviceData)
                 {
                     sd_fat_private_t *priv = (sd_fat_private_t *)devoptab->deviceData;
                     *pClient = priv->pClient;
                     *pCmd = priv->pCmd;
-                    *mountPath = (char*) malloc(strlen(priv->mount_path)+1);
-                    if(*mountPath)
+                    *mountPath = (char *)malloc(strlen(priv->mount_path) + 1);
+                    if (*mountPath)
                         strcpy(*mountPath, priv->mount_path);
-                    if(priv->pMutex)
+                    if (priv->pMutex)
                         free(priv->pMutex);
                     free(devoptab->deviceData);
                 }
 
-                free((devoptab_t*)devoptab);
+                free((devoptab_t *)devoptab);
                 return 0;
             }
         }
@@ -973,14 +1032,15 @@ int mount_sd_fat(const char *path)
     int result = -1;
 
     // get command and client
-    void* pClient = malloc(FS_CLIENT_SIZE);
-    void* pCmd = malloc(FS_CMD_BLOCK_SIZE);
+    void *pClient = malloc(FS_CLIENT_SIZE);
+    void *pCmd = malloc(FS_CMD_BLOCK_SIZE);
 
-    if(!pClient || !pCmd) {
+    if (!pClient || !pCmd)
+    {
         // just in case free if not 0
-        if(pClient)
+        if (pClient)
             free(pClient);
-        if(pCmd)
+        if (pCmd)
             free(pCmd);
         return -2;
     }
@@ -991,7 +1051,8 @@ int mount_sd_fat(const char *path)
 
     char *mountPath = NULL;
 
-    if(MountFS(pClient, pCmd, &mountPath) == 0) {
+    if (MountFS(pClient, pCmd, &mountPath) == 0)
+    {
         result = sd_fat_add_device(path, mountPath, pClient, pCmd);
         free(mountPath);
     }
@@ -1006,7 +1067,7 @@ int unmount_sd_fat(const char *path)
     char *mountPath = 0;
 
     int result = sd_fat_remove_device(path, &pClient, &pCmd, &mountPath);
-    if(result == 0)
+    if (result == 0)
     {
         UmountFS(pClient, pCmd, mountPath);
         FSDelClient(pClient);
