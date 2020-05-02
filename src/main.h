@@ -6,11 +6,12 @@
 
 /* Main */
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-//! C wrapper for our C++ functions
-int Menu_Main(void);
+    //! C wrapper for our C++ functions
+    int Menu_Main(void);
 
 #ifdef __cplusplus
 }

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <malloc.h>
+#include <math.h>
 #include <gctypes.h>
 #include <fat.h>
 #include <iosuhax.h>
@@ -23,21 +24,28 @@
 #include "system/memory.h"
 #include "utils/logger.h"
 #include "utils/utils.h"
+#include "utils/file.h"
+#include "utils/screen.h"
+#include "utils/dict.h"
 #include "common/common.h"
 #include <dirent.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 
-#define TITLE_TEXT "Sort Wii U Menu v0.2.0 - Yardape8000 & doino-gretchenliev"
+#define TITLE_TEXT "Sort Wii U Menu v1.0.0 - Yardape8000 & doino-gretchenliev"
 #define HBL_TITLE_ID 0x13374842
 
 static const char *systemXmlPath = "storage_slc:/config/system.xml";
 static const char *syshaxXmlPath = "storage_slc:/config/syshax.xml";
 static const char *cafeXmlPath = "storage_slc:/proc/prefs/cafe.xml";
 static const char *dontmovePath = "sd:/wiiu/apps/menu_sort/dontmove";
+static const char *gamemapPath = "sd:/wiiu/apps/menu_sort/titlesmap";
 static const char *languages[] = {"JA", "EN", "FR", "DE", "IT", "ES", "ZHS", "KO", "NL", "PT", "RU", "ZHT"};
 static char languageText[14] = "longname_en";
+
+int badNamingMode = 0;
+int ignoreThe = 0;
 
 struct MenuItemStruct
 {
@@ -109,12 +117,7 @@ int fsa_read(int fsa_fd, int fd, void *buf, int len)
 	return done;
 }
 
-int startsWith(const char *a, const char *b)
-{
-	return strncasecmp(b, a, strlen(b)) == 0;
-}
-
-int smartStrcmp(const char *a, const char *b)
+int smartStrcmp(const char *a, const char *b, const u32 a_id, const u32 b_id)
 {
 	char *ac = malloc(strlen(a) + 1);
 	char *bc = malloc(strlen(b) + 1);
@@ -122,26 +125,49 @@ int smartStrcmp(const char *a, const char *b)
 	strcpy(ac, a);
 	strcpy(bc, b);
 
-	if (startsWith(ac, "the "))
+	if (ignoreThe)
 	{
-		memmove(ac, ac + 4, strlen(ac));
+		removeThe(ac);
+		removeThe(bc);
 	}
 
-	if (startsWith(bc, "the "))
+	if (badNamingMode)
 	{
-		memmove(bc, bc + 4, strlen(bc));
+		int a_id_size = (int)((ceil(log10(a_id)) + 1) * sizeof(char));
+		char a_id_string[a_id_size];
+
+		int b_id_size = (int)((ceil(log10(b_id)) + 1) * sizeof(char));
+		char b_id_string[b_id_size];
+
+		itoa(a_id, a_id_string, 16);
+		itoa(b_id, b_id_string, 16);
+
+		struct nlist *np;
+		np = lookup(a_id_string);
+		if (np != NULL)
+		{
+			ac = prepend(ac, np->defn);
+		}
+
+		np = lookup(b_id_string);
+		if (np != NULL)
+		{
+			bc = prepend(bc, np->defn);
+		}
 	}
 
 	int result = strcasecmp(ac, bc);
 	free(ac);
 	free(bc);
-
 	return result;
 }
 
 int fSortCond(const void *c1, const void *c2)
 {
-	return smartStrcmp(((struct MenuItemStruct *)c1)->name, ((struct MenuItemStruct *)c2)->name);
+	return smartStrcmp(((struct MenuItemStruct *)c1)->name,
+					   ((struct MenuItemStruct *)c2)->name,
+					   ((struct MenuItemStruct *)c1)->ID,
+					   ((struct MenuItemStruct *)c2)->ID);
 }
 
 void getXMLelement(const char *buff, size_t buffSize, const char *url, const char *elementName, char *text, size_t textSize)
@@ -238,7 +264,7 @@ int Menu_Main(void)
 	//	InitCCRFunctionPointers();
 	InitSocketFunctionPointers();
 
-	log_init("192.168.40.2");
+	log_init("192.168.1.16");
 	log_print("\n\nStarting Main\n");
 
 	InitFSFunctionPointers();
@@ -265,31 +291,74 @@ int Menu_Main(void)
 
 	VPADInit();
 
-	// Prepare screen
-	int screen_buf0_size = 0;
+	screenInit();
+	screenClear();
+	screenPrint(TITLE_TEXT);
+	screenPrint("Choose sorting method:");
+	screenPrint("Press 'B' for standard sorting.");
+	screenPrint("Press 'A' for standard sorting(ignoring leading 'The').");
+	screenPrint("Press 'X' for bad naming mode sorting.");
+	screenPrint("Press 'Y' for bad naming mode sorting(ignoring leading 'The').");
 
-	// Init screen and screen buffers
-	OSScreenInit();
-	screen_buf0_size = OSScreenGetBufferSizeEx(0);
-	OSScreenSetBufferEx(0, (void *)0xF4000000);
-	OSScreenSetBufferEx(1, (void *)(0xF4000000 + screen_buf0_size));
+	int vpadError;
+	VPADData vpad;
 
-	OSScreenEnableEx(0, 1);
-	OSScreenEnableEx(1, 1);
+	char modeText[25] = "";
+	char ignoreTheText[25] = "";
 
-	// Clear screens
-	OSScreenClearBufferEx(0, 0);
-	OSScreenClearBufferEx(1, 0);
-
-	for (int i = 0; i < 2; i++)
+	while (1)
 	{
-		OSScreenPutFontEx(i, 0, 0, TITLE_TEXT);
-		//OSScreenPutFontEx(i, 0, 1, TITLE_TEXT2);
+
+		VPADRead(0, &vpad, 1, &vpadError);
+		u32 pressedBtns = 0;
+
+		if (!vpadError)
+			pressedBtns = vpad.btns_d | vpad.btns_h;
+
+		if (pressedBtns & VPAD_BUTTON_B)
+		{
+			badNamingMode = 0;
+			ignoreThe = 0;
+			strcpy(modeText, "standard sorting");
+			break;
+		}
+
+		if (pressedBtns & VPAD_BUTTON_A)
+		{
+			badNamingMode = 0;
+			ignoreThe = 1;
+			strcpy(modeText, "standard sorting");
+			strcpy(ignoreTheText, "(ignoring leading 'The')");
+			break;
+		}
+
+		if (pressedBtns & VPAD_BUTTON_X)
+		{
+			badNamingMode = 1;
+			ignoreThe = 0;
+			strcpy(modeText, "bad naming mode sorting");
+			break;
+		}
+
+		if (pressedBtns & VPAD_BUTTON_Y)
+		{
+			badNamingMode = 1;
+			ignoreThe = 1;
+			strcpy(modeText, "bad naming mode sorting");
+			strcpy(ignoreTheText, "(ignoring leading 'The')");
+			break;
+		}
+
+		usleep(1000);
 	}
 
-	// Flip buffers
-	OSScreenFlipBuffersEx(0);
-	OSScreenFlipBuffersEx(1);
+	screenClear();
+	screenSetPrintLine(0);
+	screenPrint(TITLE_TEXT);
+	char modeSelectedText[50] = "";
+	sprintf(modeSelectedText, "Starting %s%s...", modeText, ignoreTheText);
+	screenPrint(modeSelectedText);
+	log_printf(modeSelectedText);
 
 	// Get Wii U Menu Title
 	// Do this before mounting the file system.
@@ -408,45 +477,99 @@ int Menu_Main(void)
 
 	// Read Don't Move titles.
 	// first try dontmoveX.hex where X is the user ID
-	// if that fails try dontmove.hex
+	// if that fails try dontmove.txt
 	char dmPath[65] = "";
 	u32 *dmItem = NULL;
-	size_t dmTotal = 0;
-	sprintf(dmPath, "%s%1x.hex", dontmovePath, userPersistentId & 0x0000000f);
+	int dmTotal = 0;
+	size_t titleIDSize = 8;
+	sprintf(dmPath, "%s%1x.txt", dontmovePath, userPersistentId & 0x0000000f);
 	fp = fopen(dmPath, "rb");
 	if (!fp)
 	{
-		sprintf(dmPath, "%s.hex", dontmovePath);
+		sprintf(dmPath, "%s.txt", dontmovePath);
 		fp = fopen(dmPath, "rb");
 	}
 	if (fp)
 	{
 		log_printf("Loading %s\n", dmPath);
-		fseek(fp, 0L, SEEK_END); // fstat.st_size returns 0, so we use this instead
-		int dmSize = ftell(fp);
-		rewind(fp);
-		if (dmSize % 4 != 0)
-			log_printf("%s size not multiple of 4\n", dmPath);
-		else
+		int ch, lines = 0;
+		do
 		{
-			dmItem = malloc(dmSize);
-			if (dmItem == NULL)
-				log_printf("Memory not allocated for %s\n", dmPath);
-			else
-			{
-				memset(dmItem, 0, dmSize);
-				fread(dmItem, 1, dmSize, fp);
-				dmTotal = dmSize / 4;
-				log_printf("%d items found and will not be moved.\n", dmTotal);
-				for (u32 i = 0; i < dmTotal; i++)
-					log_printf("%08x\n", dmItem[i]);
-			}
+			ch = fgetc(fp);
+			if (ch == '\n')
+				lines++;
+		} while (ch != EOF);
+		rewind(fp);
+
+		dmTotal = lines;
+		dmItem = (u32 *)malloc(sizeof(u32) * lines);
+
+		log_printf("Number of games to load(dontmove): %d\n", lines);
+
+		for (int i = 0; i < lines; i++)
+		{
+			size_t len = titleIDSize;
+			char *currTitleID = (char *)malloc(len + 1);
+			getline(&currTitleID, &len, fp);
+			dmItem[i] = (u32)strtol(currTitleID, NULL, 16);
+			free(currTitleID);
 		}
+
 		fclose(fp);
 	}
 	else
 	{
 		log_printf("Could not open %s\n", dmPath);
+	}
+
+	if (badNamingMode)
+	{
+		char gmPath[65] = "";
+		sprintf(gmPath, "%s%1x.psv", gamemapPath, userPersistentId & 0x0000000f);
+		fp = fopen(gmPath, "rb");
+		if (!fp)
+		{
+			sprintf(gmPath, "%s.psv", gamemapPath);
+			fp = fopen(gmPath, "rb");
+		}
+		if (fp)
+		{
+			log_printf("Loading %s\n", gmPath);
+			int ch, max_ch_count, ch_count, lines = 0;
+			do
+			{
+				ch = fgetc(fp);
+				ch_count++;
+				if (ch == '\n')
+				{
+					lines++;
+					if (ch_count > max_ch_count)
+						max_ch_count = ch_count;
+				}
+			} while (ch != EOF);
+			rewind(fp);
+
+			log_printf("Number of games in the map to load(dontmove): %d\n", lines);
+
+			for (int i = 0; i < lines; i++)
+			{
+				size_t len = max_ch_count;
+				char *currTitleID = (char *)malloc(len + 1);
+				getline(&currTitleID, &len, fp);
+
+				char *id = strtok(currTitleID, "|");
+				char *group = strtok(NULL, "|");
+				group = strtok(group, "\n");
+				install(id, group);
+				free(currTitleID);
+			}
+
+			fclose(fp);
+		}
+		else
+		{
+			log_printf("Could not open %s\n", gmPath);
+		}
 	}
 
 	// Read Menu Data
@@ -536,7 +659,7 @@ int Menu_Main(void)
 						continue;
 				}
 				// Is ID on Don't Move list?
-				for (u32 j = 0; j < dmTotal; j++)
+				for (int j = 0; j < dmTotal; j++)
 				{
 					if (id == dmItem[j])
 					{
@@ -544,6 +667,7 @@ int Menu_Main(void)
 						break;
 					}
 				}
+
 				if (!moveableItem[i])
 					continue;
 
@@ -585,7 +709,7 @@ int Menu_Main(void)
 					idUSB = menuItem[itemNum].ID;
 					idUSBh = menuItem[itemNum].titleIDPrefix;
 				}
-				log_printf("%d %s\n", i, menuItem[itemNum].name);
+				log_printf("[%d][%08x] %s\n", i, menuItem[itemNum].ID, menuItem[itemNum].name);
 				itemNum++;
 			}
 
@@ -618,44 +742,23 @@ int Menu_Main(void)
 	free(fBuffer);
 	free(dmItem);
 
-	int vpadError = -1;
-	VPADData vpad;
-	int vpadReadCounter = 0;
-	int update_screen = 1;
+	screenPrintAt(strlen(modeSelectedText), screenGetPrintLine(), "done.");
+
+	char text[20] = "";
+	sprintf(text, "User ID: %1x", userPersistentId & 0x0000000f);
+	screenPrint(text);
+	screenPrint("Press Home to exit");
 
 	while (1)
 	{
-		if (update_screen)
-		{
-			OSScreenClearBufferEx(0, 0);
-			OSScreenClearBufferEx(1, 0);
-			for (int i = 0; i < 2; i++)
-			{
-				OSScreenPutFontEx(i, 0, 0, TITLE_TEXT);
-				char text[20] = "";
-				sprintf(text, "User ID: %1x", userPersistentId & 0x0000000f);
-				OSScreenPutFontEx(i, 0, 2, text);
-				OSScreenPutFontEx(i, 0, 4, "DONE - Press Home to exit");
-			}
-			// Flip buffers
-			OSScreenFlipBuffersEx(0);
-			OSScreenFlipBuffersEx(1);
-			update_screen = 0;
-		}
-		//! update only at 50 Hz, thats more than enough
-		if (++vpadReadCounter >= 20)
-		{
-			vpadReadCounter = 0;
+		VPADRead(0, &vpad, 1, &vpadError);
+		u32 pressedBtns = 0;
 
-			VPADRead(0, &vpad, 1, &vpadError);
-			u32 pressedBtns = 0;
+		if (!vpadError)
+			pressedBtns = vpad.btns_d | vpad.btns_h;
 
-			if (!vpadError)
-				pressedBtns = vpad.btns_d | vpad.btns_h;
-
-			if (pressedBtns & VPAD_BUTTON_HOME)
-				break;
-		}
+		if (pressedBtns & VPAD_BUTTON_HOME)
+			break;
 
 		usleep(1000);
 	}
@@ -664,16 +767,7 @@ int Menu_Main(void)
 prgEnd:
 	if (failed)
 	{
-		OSScreenClearBufferEx(0, 0);
-		OSScreenClearBufferEx(1, 0);
-		for (int i = 0; i < 2; i++)
-		{
-			OSScreenPutFontEx(i, 0, 0, TITLE_TEXT);
-			OSScreenPutFontEx(i, 0, 2, failError);
-		}
-		// Flip buffers
-		OSScreenFlipBuffersEx(0);
-		OSScreenFlipBuffersEx(1);
+		screenPrint(failError);
 		sleep(5);
 	}
 	log_printf("Unmount\n");
