@@ -33,7 +33,7 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 
-#define TITLE_TEXT "Sort Wii U Menu v1.0.0 - Yardape8000 & doino-gretchenliev"
+#define TITLE_TEXT "Sort Wii U Menu v1.1.0 - Yardape8000 & doino-gretchenliev"
 #define HBL_TITLE_ID 0x13374842
 
 static const char *systemXmlPath = "storage_slc:/config/system.xml";
@@ -41,11 +41,14 @@ static const char *syshaxXmlPath = "storage_slc:/config/syshax.xml";
 static const char *cafeXmlPath = "storage_slc:/proc/prefs/cafe.xml";
 static const char *dontmovePath = "sd:/wiiu/apps/menu_sort/dontmove";
 static const char *gamemapPath = "sd:/wiiu/apps/menu_sort/titlesmap";
+static const char *backupPath = "sd:/wiiu/apps/menu_sort/BaristaAccountSaveFile.dat";
 static const char *languages[] = {"JA", "EN", "FR", "DE", "IT", "ES", "ZHS", "KO", "NL", "PT", "RU", "ZHT"};
 static char languageText[14] = "longname_en";
 
 int badNamingMode = 0;
 int ignoreThe = 0;
+int backup = 0;
+int restore = 0;
 
 struct MenuItemStruct
 {
@@ -299,6 +302,8 @@ int Menu_Main(void)
 	screenPrint("Press 'A' for standard sorting(ignoring leading 'The').");
 	screenPrint("Press 'X' for bad naming mode sorting.");
 	screenPrint("Press 'Y' for bad naming mode sorting(ignoring leading 'The').");
+	screenPrint("Press '+' for backup of the current order(incl. folders).");
+	screenPrint("Press '-' for restore of the current order(incl. folders).");
 
 	int vpadError;
 	VPADData vpad;
@@ -346,6 +351,22 @@ int Menu_Main(void)
 			ignoreThe = 1;
 			strcpy(modeText, "bad naming mode sorting");
 			strcpy(ignoreTheText, "(ignoring leading 'The')");
+			break;
+		}
+
+		if (pressedBtns & VPAD_BUTTON_PLUS)
+		{
+			backup = 1;
+			strcpy(modeText, "backup");
+			strcpy(ignoreTheText, "");
+			break;
+		}
+
+		if (pressedBtns & VPAD_BUTTON_MINUS)
+		{
+			restore = 1;
+			strcpy(modeText, "restore");
+			strcpy(ignoreTheText, "");
 			break;
 		}
 
@@ -580,167 +601,179 @@ int Menu_Main(void)
 	folderExists[0] = true;
 	sprintf(baristaPath, "storage_mlc:/usr/save/00050010/%08x/user/%08x/BaristaAccountSaveFile.dat", sysmenuId, userPersistentId);
 	log_printf("%s\n", baristaPath);
-	if (readToBuffer(&fBuffer, &fSize, baristaPath) < 0)
-	{
-		strcpy(failError, "Could not open BaristaAccountSaveFile.dat\n");
-		goto prgEnd;
-	}
-	if (fBuffer == NULL)
-	{
-		strcpy(failError, "Memory not allocated for BaristaAccountSaveFile.dat\n");
-		goto prgEnd;
-	}
 
-	log_printf("BaristaAccountSaveFile.dat size = %d\n", fSize);
-	// Main Menu - First pass - Get names
-	// Only movable items will be added.
-	for (int fNum = 0; fNum <= 60; fNum++)
+	if (backup)
 	{
-		if (!folderExists[fNum])
-			continue;
-		log_printf("\nReading - Folder %d\n", fNum);
-		int itemNum = 0;
-		int itemTotal = 0;
-		int itemSpaces = 300;
-		int folderOffset = 0;
-		if (fNum != 0)
+		fcopy(baristaPath, backupPath);
+	}
+	else if (restore)
+	{
+		fcopy(backupPath, baristaPath);
+	}
+	else
+	{
+		if (readToBuffer(&fBuffer, &fSize, baristaPath) < 0)
 		{
-			// sort sub folder
-			itemSpaces = 60;
-			folderOffset = 0x002D24 + ((fNum - 1) * (60 * 16 * 2 + 56));
+			strcpy(failError, "Could not open BaristaAccountSaveFile.dat\n");
+			goto prgEnd;
 		}
-		int usbOffset = itemSpaces * 16;
-		for (int i = 0; i < itemSpaces; i++)
+		if (fBuffer == NULL)
 		{
-			moveableItem[i] = true;
-			int itemOffset = i * 16 + folderOffset;
-			u32 id = 0;
-			u32 type = 0;
-			memcpy(&id, fBuffer + itemOffset + 4, sizeof(u32));
-			memcpy(&type, fBuffer + itemOffset + 8, sizeof(u32));
+			strcpy(failError, "Memory not allocated for BaristaAccountSaveFile.dat\n");
+			goto prgEnd;
+		}
 
-			if ((id == HBL_TITLE_ID)		  // HBL
-				|| (cbhcID && (id == cbhcID)) // CBHC
-				|| (type == MENU_ITEM_DISC)	  // Disc
-				|| (type == MENU_ITEM_VWII))  // vWii
-			{
-				moveableItem[i] = false;
+		log_printf("BaristaAccountSaveFile.dat size = %d\n", fSize);
+		// Main Menu - First pass - Get names
+		// Only movable items will be added.
+		for (int fNum = 0; fNum <= 60; fNum++)
+		{
+			if (!folderExists[fNum])
 				continue;
-			}
-			// Folder item in main menu?
-			if ((fNum == 0) && (type == MENU_ITEM_FLDR))
+			log_printf("\nReading - Folder %d\n", fNum);
+			int itemNum = 0;
+			int itemTotal = 0;
+			int itemSpaces = 300;
+			int folderOffset = 0;
+			if (fNum != 0)
 			{
-				if ((id > 0) && (id <= 60))
-					folderExists[id] = true;
-				moveableItem[i] = false;
-				continue;
+				// sort sub folder
+				itemSpaces = 60;
+				folderOffset = 0x002D24 + ((fNum - 1) * (60 * 16 * 2 + 56));
 			}
-			// NAND or USB?
-			if (type == MENU_ITEM_NAND)
+			int usbOffset = itemSpaces * 16;
+			for (int i = 0; i < itemSpaces; i++)
 			{
-				// Settings, MiiMaker, etc?
-				u32 idH = 0;
-				memcpy(&idH, fBuffer + itemOffset, sizeof(u32));
-				if ((idH != 0x00050000) && (idH != 0x00050002) && (idH != 0))
+				moveableItem[i] = true;
+				int itemOffset = i * 16 + folderOffset;
+				u32 id = 0;
+				u32 type = 0;
+				memcpy(&id, fBuffer + itemOffset + 4, sizeof(u32));
+				memcpy(&type, fBuffer + itemOffset + 8, sizeof(u32));
+
+				if ((id == HBL_TITLE_ID)		  // HBL
+					|| (cbhcID && (id == cbhcID)) // CBHC
+					|| (type == MENU_ITEM_DISC)	  // Disc
+					|| (type == MENU_ITEM_VWII))  // vWii
 				{
 					moveableItem[i] = false;
 					continue;
 				}
-				// If not NAND then check USB
-				if (id == 0)
+				// Folder item in main menu?
+				if ((fNum == 0) && (type == MENU_ITEM_FLDR))
 				{
-					if (!usb_Connected)
-						continue;
-					itemOffset += usbOffset;
-					id = 0;
-					memcpy(&id, fBuffer + itemOffset + 4, sizeof(u32));
-					type = fBuffer[itemOffset + 0x0b];
-					if ((id == 0) || (type != MENU_ITEM_USB))
-						continue;
+					if ((id > 0) && (id <= 60))
+						folderExists[id] = true;
+					moveableItem[i] = false;
+					continue;
 				}
-				// Is ID on Don't Move list?
-				for (int j = 0; j < dmTotal; j++)
+				// NAND or USB?
+				if (type == MENU_ITEM_NAND)
 				{
-					if (id == dmItem[j])
+					// Settings, MiiMaker, etc?
+					u32 idH = 0;
+					memcpy(&idH, fBuffer + itemOffset, sizeof(u32));
+					if ((idH != 0x00050000) && (idH != 0x00050002) && (idH != 0))
 					{
 						moveableItem[i] = false;
-						break;
+						continue;
 					}
-				}
+					// If not NAND then check USB
+					if (id == 0)
+					{
+						if (!usb_Connected)
+							continue;
+						itemOffset += usbOffset;
+						id = 0;
+						memcpy(&id, fBuffer + itemOffset + 4, sizeof(u32));
+						type = fBuffer[itemOffset + 0x0b];
+						if ((id == 0) || (type != MENU_ITEM_USB))
+							continue;
+					}
+					// Is ID on Don't Move list?
+					for (int j = 0; j < dmTotal; j++)
+					{
+						if (id == dmItem[j])
+						{
+							moveableItem[i] = false;
+							break;
+						}
+					}
 
+					if (!moveableItem[i])
+						continue;
+
+					// found sortable item
+					memcpy(&menuItem[itemNum].titleIDPrefix, fBuffer + itemOffset, sizeof(u32));
+					getIDname(id, menuItem[itemNum].titleIDPrefix, menuItem[itemNum].name, 65, type);
+					menuItem[itemNum].ID = id;
+					menuItem[itemNum].type = type;
+					itemNum++;
+				}
+			}
+			itemTotal = itemNum;
+			log_printf("\nDone reading folders \n");
+
+			// Sort Folder
+			qsort(menuItem, itemTotal, sizeof(struct MenuItemStruct), fSortCond);
+
+			// Move Folder Items
+			log_printf("\nNew Order - Folder %d\n", fNum);
+			itemNum = 0;
+			for (int i = 0; i < itemSpaces; i++)
+			{
 				if (!moveableItem[i])
 					continue;
+				int itemOffset = i * 16 + folderOffset;
+				u32 idNAND = 0;
+				u32 idNANDh = 0;
+				u32 idUSB = 0;
+				u32 idUSBh = 0;
+				if (itemNum < itemTotal)
+				{
+					if (menuItem[itemNum].type == MENU_ITEM_NAND)
+					{
+						idNAND = menuItem[itemNum].ID;
+						idNANDh = menuItem[itemNum].titleIDPrefix;
+					}
+					else
+					{
+						idUSB = menuItem[itemNum].ID;
+						idUSBh = menuItem[itemNum].titleIDPrefix;
+					}
+					log_printf("[%d][%08x] %s\n", i, menuItem[itemNum].ID, menuItem[itemNum].name);
+					itemNum++;
+				}
 
-				// found sortable item
-				memcpy(&menuItem[itemNum].titleIDPrefix, fBuffer + itemOffset, sizeof(u32));
-				getIDname(id, menuItem[itemNum].titleIDPrefix, menuItem[itemNum].name, 65, type);
-				menuItem[itemNum].ID = id;
-				menuItem[itemNum].type = type;
-				itemNum++;
+				memcpy(fBuffer + itemOffset, &idNANDh, sizeof(u32));
+				memcpy(fBuffer + itemOffset + 4, &idNAND, sizeof(u32));
+				memset(fBuffer + itemOffset + 8, 0, 8);
+				fBuffer[itemOffset + 0x0b] = 1;
+
+				itemOffset += usbOffset;
+
+				memcpy(fBuffer + itemOffset, &idUSBh, sizeof(u32));
+				memcpy(fBuffer + itemOffset + 4, &idUSB, sizeof(u32));
+				memset(fBuffer + itemOffset + 8, 0, 8);
+				fBuffer[itemOffset + 0x0b] = 2;
 			}
 		}
-		itemTotal = itemNum;
-		log_printf("\nDone reading folders \n");
 
-		// Sort Folder
-		qsort(menuItem, itemTotal, sizeof(struct MenuItemStruct), fSortCond);
-
-		// Move Folder Items
-		log_printf("\nNew Order - Folder %d\n", fNum);
-		itemNum = 0;
-		for (int i = 0; i < itemSpaces; i++)
+		fp = fopen(baristaPath, "wb");
+		if (fp)
 		{
-			if (!moveableItem[i])
-				continue;
-			int itemOffset = i * 16 + folderOffset;
-			u32 idNAND = 0;
-			u32 idNANDh = 0;
-			u32 idUSB = 0;
-			u32 idUSBh = 0;
-			if (itemNum < itemTotal)
-			{
-				if (menuItem[itemNum].type == MENU_ITEM_NAND)
-				{
-					idNAND = menuItem[itemNum].ID;
-					idNANDh = menuItem[itemNum].titleIDPrefix;
-				}
-				else
-				{
-					idUSB = menuItem[itemNum].ID;
-					idUSBh = menuItem[itemNum].titleIDPrefix;
-				}
-				log_printf("[%d][%08x] %s\n", i, menuItem[itemNum].ID, menuItem[itemNum].name);
-				itemNum++;
-			}
-
-			memcpy(fBuffer + itemOffset, &idNANDh, sizeof(u32));
-			memcpy(fBuffer + itemOffset + 4, &idNAND, sizeof(u32));
-			memset(fBuffer + itemOffset + 8, 0, 8);
-			fBuffer[itemOffset + 0x0b] = 1;
-
-			itemOffset += usbOffset;
-
-			memcpy(fBuffer + itemOffset, &idUSBh, sizeof(u32));
-			memcpy(fBuffer + itemOffset + 4, &idUSB, sizeof(u32));
-			memset(fBuffer + itemOffset + 8, 0, 8);
-			fBuffer[itemOffset + 0x0b] = 2;
+			fwrite(fBuffer, 1, fSize, fp);
+			fclose(fp);
 		}
-	}
+		else
+		{
+			strcpy(failError, "Could not write to BaristaAccountSaveFile.dat\n");
+			goto prgEnd;
+		}
 
-	fp = fopen(baristaPath, "wb");
-	if (fp)
-	{
-		fwrite(fBuffer, 1, fSize, fp);
-		fclose(fp);
+		free(fBuffer);
+		free(dmItem);
 	}
-	else
-	{
-		strcpy(failError, "Could not write to BaristaAccountSaveFile.dat\n");
-		goto prgEnd;
-	}
-
-	free(fBuffer);
-	free(dmItem);
 
 	screenPrintAt(strlen(modeSelectedText), screenGetPrintLine(), "done.");
 

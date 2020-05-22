@@ -2,8 +2,8 @@
 <app version="1">
   <name>Menu Sort</name>
   <coder>doino-gretchenliev</coder>
-  <version>1.0.0</version>
-  <release_date>20200504000000</release_date>
+  <version>1.1.0</version>
+  <release_date>20200523000000</release_date>
   <short_description>WiiU Menu Sort</short_description>
   <long_description>Sorts items on Wii U Menu.</long_description>
 </app>
