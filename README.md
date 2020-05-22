@@ -18,6 +18,10 @@ Homebrew Launcher
 CHBC (untested)
 Any IDs specified in [dontmove.txt](dontmove.txt).
 
+### Backup and Restore
+
+In the manu there are options for backup and restore of the current order, including folders. It's highly advisable to create a backup before proceeding to new sorting. The backup file will be created at `/wiiu/apps/menu_sort/BaristaAccountSaveFile.dat` on your SD card. You can use that backup to restore a previous state or to sync folders between multiple profiles. The restore option will restore the backup in the current profile only, but one backup can be used for restore on multiple profiles.
+
 ### Sorting modes
 
 1. _Standard sorting_: sorts titles alphabetically.
