@@ -31,6 +31,10 @@ In the manu there are options for backup and restore of the current order, inclu
 
 You can try different sorting modes to see what works for you. Every time the app is executed it'll sort all titles based on the selected sorting mode.
 
+### Counting items
+
+Wii U system has limitation of 300 items, including items located in folders. The count option returns the current items count.
+
 ### Don't move list
 
 You can override the default [dontmove.txt](dontmove.txt) with your custom list.
